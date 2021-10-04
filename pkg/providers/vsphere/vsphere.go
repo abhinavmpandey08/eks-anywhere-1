@@ -1168,6 +1168,7 @@ func buildTemplateMapMD(clusterSpec *cluster.Spec, datacenterSpec v1alpha1.VSphe
 		noProxyList = append(noProxyList,
 			"localhost",
 			"127.0.0.1",
+			".svc",
 			datacenterSpec.Server,
 			clusterSpec.Spec.ControlPlaneConfiguration.Endpoint.Host,
 		)
