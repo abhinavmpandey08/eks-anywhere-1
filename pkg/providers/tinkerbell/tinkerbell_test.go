@@ -54,23 +54,25 @@ func givenMachineConfigs(t *testing.T, fileName string) map[string]*v1alpha1.Tin
 	return machineConfigs
 }
 
-func newProviderWithKubectlWithTink(t *testing.T, datacenterConfig *v1alpha1.TinkerbellDatacenterConfig, machineConfigs map[string]*v1alpha1.TinkerbellMachineConfig, clusterConfig *v1alpha1.Cluster, writer filewriter.FileWriter, kubectl ProviderKubectlClient, tinkerbellClients TinkerbellClients) *Provider {
+func newProviderWithKubectlWithTink(t *testing.T, datacenterConfig *v1alpha1.TinkerbellDatacenterConfig, machineConfigs map[string]*v1alpha1.TinkerbellMachineConfig, clusterConfig *v1alpha1.Cluster, writer filewriter.FileWriter, docker ProviderDockerClient, kubectl ProviderKubectlClient, tinkerbellClients TinkerbellClients) *Provider {
 	return newProvider(
 		datacenterConfig,
 		machineConfigs,
 		clusterConfig,
 		writer,
+		docker,
 		kubectl,
 		tinkerbellClients,
 	)
 }
 
-func newProvider(datacenterConfig *v1alpha1.TinkerbellDatacenterConfig, machineConfigs map[string]*v1alpha1.TinkerbellMachineConfig, clusterConfig *v1alpha1.Cluster, writer filewriter.FileWriter, kubectl ProviderKubectlClient, tinkerbellClients TinkerbellClients) *Provider {
+func newProvider(datacenterConfig *v1alpha1.TinkerbellDatacenterConfig, machineConfigs map[string]*v1alpha1.TinkerbellMachineConfig, clusterConfig *v1alpha1.Cluster, writer filewriter.FileWriter, docker ProviderDockerClient, kubectl ProviderKubectlClient, tinkerbellClients TinkerbellClients) *Provider {
 	return NewProvider(
 		datacenterConfig,
 		machineConfigs,
 		clusterConfig,
 		writer,
+		docker,
 		kubectl,
 		tinkerbellClients,
 		test.FakeNow,
@@ -161,6 +163,7 @@ func TestTinkerbellProviderGenerateDeploymentFileWithExternalEtcd(t *testing.T) 
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_external_etcd.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -179,7 +182,7 @@ func TestTinkerbellProviderGenerateDeploymentFileWithExternalEtcd(t *testing.T) 
 
 	pbnjClient.EXPECT().GetPowerState(ctx, gomock.Any()).Return(pbnj.PowerStateOff, nil).Times(8)
 
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
 	if err := provider.SetupAndValidateCreateCluster(ctx, clusterSpec); err != nil {
 		t.Fatalf("failed to setup and validate: %v", err)
 	}
@@ -197,6 +200,7 @@ func TestTinkerbellProviderMachineConfigsMissingUserSshKeys(t *testing.T) {
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_missing_ssh_keys.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -219,7 +223,7 @@ func TestTinkerbellProviderMachineConfigsMissingUserSshKeys(t *testing.T) {
 	const sshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC1BK73XhIzjX+meUr7pIYh6RHbvI3tmHeQIXY5lv7aztN1UoX+bhPo3dwo2sfSQn5kuxgQdnxIZ/CTzy0p0GkEYVv3gwspCeurjmu0XmrdmaSGcGxCEWT/65NtvYrQtUE5ELxJ+N/aeZNlK2B7IWANnw/82913asXH4VksV1NYNduP0o1/G4XcwLLSyVFB078q/oEnmvdNIoS61j4/o36HVtENJgYr0idcBvwJdvcGxGnPaqOhx477t+kfJAa5n5dSA5wilIaoXH5i1Tf/HsTCM52L+iNCARvQzJYZhzbWI1MDQwzILtIBEQCJsl2XSqIupleY8CxqQ6jCXt2mhae+wPc3YmbO5rFvr2/EvC57kh3yDs1Nsuj8KOvD78KeeujbR8n8pScm3WDp62HFQ8lEKNdeRNj6kB8WnuaJvPnyZfvzOhwG65/9w13IBl7B1sWxbFnq2rMpm5uHVK7mAmjL0Tt8zoDhcE1YJEnp9xte3/pvmKPkST5Q/9ZtR9P5sI+02jY0fvPkPyC03j2gsPixG7rpOCwpOdbny4dcj0TDeeXJX8er+oVfJuLYz0pNWJcT2raDdFfcqvYA0B0IyNYlj5nWX4RuEcyT3qocLReWPnZojetvAG/H8XwOh7fEVGqHAKOVSnPXCSQJPl6s0H12jPJBDJMTydtYPEszl4/CeQ=="
 	keyGenerator.EXPECT().GenerateSSHAuthKey(gomock.Any()).Return(sshKey, nil)
 
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
 
 	// Hack: monkey patch the key generator directly for determinism.
 	provider.keyGenerator = keyGenerator
@@ -240,6 +244,7 @@ func TestTinkerbellProviderGenerateDeploymentFileWithStackedEtcd(t *testing.T) {
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_stacked_etcd.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -257,7 +262,7 @@ func TestTinkerbellProviderGenerateDeploymentFileWithStackedEtcd(t *testing.T) {
 	tink.EXPECT().GetWorkflow(ctx).Return([]*tinkworkflow.Workflow{}, nil)
 	pbnjClient.EXPECT().GetPowerState(ctx, gomock.Any()).Return(pbnj.PowerStateOff, nil).Times(8)
 
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
 	if err := provider.SetupAndValidateCreateCluster(ctx, clusterSpec); err != nil {
 		t.Fatalf("failed to setup and validate: %v", err)
 	}
@@ -275,6 +280,7 @@ func TestTinkerbellProviderGenerateDeploymentFileMultipleWorkerNodeGroups(t *tes
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_multiple_node_groups.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -292,7 +298,7 @@ func TestTinkerbellProviderGenerateDeploymentFileMultipleWorkerNodeGroups(t *tes
 	tink.EXPECT().GetWorkflow(ctx).Return([]*tinkworkflow.Workflow{}, nil)
 
 	pbnjClient.EXPECT().GetPowerState(ctx, gomock.Any()).Return(pbnj.PowerStateOff, nil).Times(8)
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
 	if err := provider.SetupAndValidateCreateCluster(ctx, clusterSpec); err != nil {
 		t.Fatalf("failed to setup and validate: %v", err)
 	}
@@ -310,6 +316,7 @@ func TestTinkerbellProviderPreCAPIInstallOnBootstrapSuccess(t *testing.T) {
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_stacked_etcd.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -326,15 +333,28 @@ func TestTinkerbellProviderPreCAPIInstallOnBootstrapSuccess(t *testing.T) {
 		Tink: releasev1alpha1.TinkBundle{
 			Manifest: releasev1alpha1.Manifest{URI: "tink.yaml"},
 		},
+		Boots: releasev1alpha1.TinkerbellServiceBundle{
+			Manifest: releasev1alpha1.Manifest{URI: "boots.yaml"},
+			Image:    releasev1alpha1.Image{URI: "public.ecr.aws/eks-anywhere/tinkerbell/boots:latest"},
+		},
 	}
 
 	kubectl.EXPECT().ApplyKubeSpec(ctx, cluster, "tink.yaml")
 	kubectl.EXPECT().WaitForDeployment(ctx, cluster, deploymentWaitTimeout, "Available", "tink-server", tinkNamespace)
 	kubectl.EXPECT().WaitForDeployment(ctx, cluster, deploymentWaitTimeout, "Available", "tink-controller-manager", tinkNamespace)
 
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	docker.EXPECT().Run(ctx,
+		"public.ecr.aws/eks-anywhere/tinkerbell/boots:latest",
+		"boots",
+		[]string{"--kubeconfig", "/kubeconfig"},
+		"-e", "DATA_MODEL_VERSION=kubernetes",
+		"-v", gomock.Any(),
+		"--network", "host",
+	)
 
-	err := provider.InstallTinkerbellStack(ctx, cluster, clusterSpec)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
+
+	err := provider.InstallTinkerbellStack(ctx, cluster, clusterSpec, true)
 	if err != nil {
 		t.Fatalf("failed to install Tinkerbell stack: %v", err)
 	}
@@ -344,6 +364,7 @@ func TestTinkerbellProviderPreCAPIInstallOnBootstrapFailureApplyingManifest(t *t
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_stacked_etcd.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -362,13 +383,13 @@ func TestTinkerbellProviderPreCAPIInstallOnBootstrapFailureApplyingManifest(t *t
 		},
 	}
 
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
 
 	kubectlError := "kubectl error"
 	expectedError := fmt.Sprintf("applying tink manifest: %s", kubectlError)
 	kubectl.EXPECT().ApplyKubeSpec(ctx, cluster, "tink.yaml").Return(errors.New(kubectlError))
 
-	err := provider.InstallTinkerbellStack(ctx, cluster, clusterSpec)
+	err := provider.InstallTinkerbellStack(ctx, cluster, clusterSpec, true)
 	assert.EqualError(t, err, expectedError, "Error should be: %v, got: %v", expectedError, err)
 }
 
@@ -376,6 +397,7 @@ func TestTinkerbellProviderPreCAPIInstallOnBootstrapFailureWaitingForDeployment(
 	setupContext(t)
 	clusterSpecManifest := "cluster_tinkerbell_stacked_etcd.yaml"
 	mockCtrl := gomock.NewController(t)
+	docker := mocks.NewMockProviderDockerClient(mockCtrl)
 	kubectl := mocks.NewMockProviderKubectlClient(mockCtrl)
 	tink := mocks.NewMockProviderTinkClient(mockCtrl)
 	pbnjClient := mocks.NewMockProviderPbnjClient(mockCtrl)
@@ -394,13 +416,13 @@ func TestTinkerbellProviderPreCAPIInstallOnBootstrapFailureWaitingForDeployment(
 		},
 	}
 
-	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, kubectl, tinkerbellClients)
+	provider := newProviderWithKubectlWithTink(t, datacenterConfig, machineConfigs, clusterSpec.Cluster, writer, docker, kubectl, tinkerbellClients)
 
 	kubectlError := "kubectl error"
 	expectedError := fmt.Sprintf("waiting for deployment tink-server: %s", kubectlError)
 	kubectl.EXPECT().ApplyKubeSpec(ctx, cluster, "tink.yaml")
 	kubectl.EXPECT().WaitForDeployment(ctx, cluster, deploymentWaitTimeout, "Available", "tink-server", tinkNamespace).Return(errors.New(kubectlError))
 
-	err := provider.InstallTinkerbellStack(ctx, cluster, clusterSpec)
+	err := provider.InstallTinkerbellStack(ctx, cluster, clusterSpec, true)
 	assert.EqualError(t, err, expectedError, "Error should be: %v, got: %v", expectedError, err)
 }

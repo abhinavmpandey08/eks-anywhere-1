@@ -49,7 +49,7 @@ func (p *Provider) BootstrapClusterOpts() ([]bootstrapper.BootstrapClusterOption
 func (p *Provider) PreCAPIInstallOnBootstrap(ctx context.Context, cluster *types.Cluster, clusterSpec *cluster.Spec) error {
 	if p.setupTinkerbell {
 		logger.V(4).Info("Installing Tinkerbell stack on the bootstrap cluster")
-		if err := p.InstallTinkerbellStack(ctx, cluster, clusterSpec); err != nil {
+		if err := p.InstallTinkerbellStack(ctx, cluster, clusterSpec, true); err != nil {
 			return fmt.Errorf("installing tinkerbell stack on the bootstrap cluster: %v", err)
 		}
 	}

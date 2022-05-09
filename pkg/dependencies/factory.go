@@ -218,7 +218,7 @@ func (f *Factory) WithProvider(clusterConfigFile string, clusterConfig *v1alpha1
 	case v1alpha1.DockerDatacenterKind:
 		f.WithDocker().WithKubectl()
 	case v1alpha1.TinkerbellDatacenterKind:
-		f.WithKubectl().WithTink(clusterConfigFile).WithPbnj(clusterConfigFile).WithWriter()
+		f.WithDocker().WithKubectl().WithTink(clusterConfigFile).WithPbnj(clusterConfigFile).WithWriter()
 	case v1alpha1.SnowDatacenterKind:
 		f.WithUnAuthKubeClient().WithSnowConfigManager()
 	}
@@ -296,6 +296,7 @@ func (f *Factory) WithProvider(clusterConfigFile string, clusterConfig *v1alpha1
 				machineConfigs,
 				clusterConfig,
 				f.dependencies.Writer,
+				f.dependencies.DockerClient,
 				f.dependencies.Kubectl,
 				tinkerbell.TinkerbellClients{
 					ProviderTinkClient: f.dependencies.Tink,
