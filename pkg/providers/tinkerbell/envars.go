@@ -12,20 +12,20 @@ func setupEnvVars(datacenterConfig *anywherev1.TinkerbellDatacenterConfig) error
 		return fmt.Errorf("unable to set %s: %v", tinkerbellIPKey, err)
 	}
 
-	if err := os.Setenv(tinkerbellCertURLKey, datacenterConfig.Spec.TinkerbellCertURL); err != nil {
-		return fmt.Errorf("unable to set %s: %v", tinkerbellCertURLKey, err)
-	}
+	// if err := os.Setenv(tinkerbellCertURLKey, datacenterConfig.Spec.TinkerbellCertURL); err != nil {
+	// 	return fmt.Errorf("unable to set %s: %v", tinkerbellCertURLKey, err)
+	// }
 
-	if err := os.Setenv(tinkerbellGRPCAuthKey, datacenterConfig.Spec.TinkerbellGRPCAuth); err != nil {
-		return fmt.Errorf("unable to set %s: %v", tinkerbellGRPCAuthKey, err)
-	}
+	// if err := os.Setenv(tinkerbellGRPCAuthKey, datacenterConfig.Spec.TinkerbellGRPCAuth); err != nil {
+	// 	return fmt.Errorf("unable to set %s: %v", tinkerbellGRPCAuthKey, err)
+	// }
 
-	if err := os.Setenv(tinkerbellPBnJGRPCAuthorityKey, datacenterConfig.Spec.TinkerbellPBnJGRPCAuth); err != nil {
-		return fmt.Errorf("unable to set %s: %v", tinkerbellPBnJGRPCAuthorityKey, err)
-	}
+	// if err := os.Setenv(tinkerbellPBnJGRPCAuthorityKey, datacenterConfig.Spec.TinkerbellPBnJGRPCAuth); err != nil {
+	// 	return fmt.Errorf("unable to set %s: %v", tinkerbellPBnJGRPCAuthorityKey, err)
+	// }
 
-	if err := os.Setenv(tinkerbellHegelURLKey, datacenterConfig.Spec.TinkerbellHegelURL); err != nil {
-		return fmt.Errorf("unable to set %s: %v", tinkerbellHegelURLKey, err)
-	}
+	// if err := os.Setenv(tinkerbellHegelURLKey, datacenterConfig.Spec.TinkerbellHegelURL); err != nil {
+	// 	return fmt.Errorf("unable to set %s: %v", tinkerbellHegelURLKey, err)
+	// }
 	return nil
 }

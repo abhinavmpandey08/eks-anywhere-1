@@ -17,7 +17,6 @@ import (
 	"github.com/aws/eks-anywhere/pkg/bootstrapper"
 	"github.com/aws/eks-anywhere/pkg/cluster"
 	"github.com/aws/eks-anywhere/pkg/logger"
-	"github.com/aws/eks-anywhere/pkg/providers/tinkerbell/hardware"
 	"github.com/aws/eks-anywhere/pkg/providers/tinkerbell/pbnj"
 	"github.com/aws/eks-anywhere/pkg/types"
 )
@@ -59,13 +58,23 @@ func (p *Provider) PreCAPIInstallOnBootstrap(ctx context.Context, cluster *types
 
 func (p *Provider) PostBootstrapSetup(ctx context.Context, clusterConfig *v1alpha1.Cluster, cluster *types.Cluster) error {
 	// TODO: figure out if we need something else here
-	hardwareSpec, err := p.catalogue.HardwareSpecMarshallable()
-	if err != nil {
-		return fmt.Errorf("failed marshalling resources for hardware spec: %v", err)
-	}
-	err = p.providerKubectlClient.ApplyKubeSpecFromBytesForce(ctx, cluster, hardwareSpec)
+	// hardwareSpec, err := p.catalogue.HardwareSpecMarshallable()
+	// if err != nil {
+	// 	return fmt.Errorf("failed marshalling resources for hardware spec: %v", err)
+	// }
+	err := p.providerKubectlClient.ApplyKubeSpec(ctx, cluster, p.hardwareManifestPath)
 	if err != nil {
 		return fmt.Errorf("applying hardware yaml: %v", err)
+	}
+	return nil
+}
+
+func (p *Provider) PostWorkloadInit(ctx context.Context, cluster *types.Cluster, clusterSpec *cluster.Spec) error {
+	if p.setupTinkerbell {
+		logger.V(4).Info("Installing Tinkerbell stack on the workload cluster")
+		if err := p.InstallTinkerbellStack(ctx, cluster, clusterSpec, false); err != nil {
+			return fmt.Errorf("installing tinkerbell stack on the workload cluster: %v", err)
+		}
 	}
 	return nil
 }
@@ -73,11 +82,11 @@ func (p *Provider) PostBootstrapSetup(ctx context.Context, clusterConfig *v1alph
 func (p *Provider) SetupAndValidateCreateCluster(ctx context.Context, clusterSpec *cluster.Spec) error {
 	logger.Info("Warning: The tinkerbell infrastructure provider is still in development and should not be used in production")
 
-	tinkHardware, err := p.providerTinkClient.GetHardware(ctx)
-	if err != nil {
-		return fmt.Errorf("retrieving tinkerbell hardware: %v", err)
-	}
-	logger.MarkPass("Connected to tinkerbell stack")
+	// tinkHardware, err := p.providerTinkClient.GetHardware(ctx)
+	// if err != nil {
+	// 	return fmt.Errorf("retrieving tinkerbell hardware: %v", err)
+	// }
+	// logger.MarkPass("Connected to tinkerbell stack")
 
 	if err := setupEnvVars(p.datacenterConfig); err != nil {
 		return fmt.Errorf("failed setup and validations: %v", err)
@@ -89,16 +98,16 @@ func (p *Provider) SetupAndValidateCreateCluster(ctx context.Context, clusterSpe
 		return err
 	}
 
-	if err := hardware.ParseYAMLCatalogueFromFile(&p.catalogue, p.hardwareManifestPath); err != nil {
-		return err
-	}
+	// if err := hardware.ParseYAMLCatalogueFromFile(&p.catalogue, p.hardwareManifestPath); err != nil {
+	// 	return err
+	// }
 
 	// ValidateHardwareCatalogue performs a lazy load of hardware configuration. Given subsequent steps need the hardware
 	// read into memory it needs to be done first. It also needs connection to
 	// Tinkerbell steps to verify hardware availability on the stack
-	if err := p.validator.ValidateHardwareCatalogue(ctx, p.catalogue, tinkHardware, p.skipPowerActions, p.force); err != nil {
-		return err
-	}
+	// if err := p.validator.ValidateHardwareCatalogue(ctx, p.catalogue, tinkHardware, p.skipPowerActions, p.force); err != nil {
+	// 	return err
+	// }
 
 	if p.force {
 		if err := p.setHardwareStateToProvisining(ctx); err != nil {
@@ -111,9 +120,9 @@ func (p *Provider) SetupAndValidateCreateCluster(ctx context.Context, clusterSpe
 			}
 		}
 
-		if err := p.scrubWorkflowsFromTinkerbell(ctx, p.catalogue.Hardware, tinkHardware); err != nil {
-			return err
-		}
+		// if err := p.scrubWorkflowsFromTinkerbell(ctx, p.catalogue.Hardware, tinkHardware); err != nil {
+		// 	return err
+		// }
 	} else if !p.skipPowerActions {
 		if err := p.validator.ValidateMachinesPoweredOff(ctx, p.catalogue); err != nil {
 			return fmt.Errorf("validating machines are powered off: %w", err)
@@ -132,9 +141,9 @@ func (p *Provider) SetupAndValidateCreateCluster(ctx context.Context, clusterSpe
 		return fmt.Errorf("failed validating control plane template config: %v", err)
 	}
 
-	if err := p.validator.ValidateMinHardwareAvailableForCreate(tinkerbellClusterSpec.Spec.Cluster.Spec, p.catalogue); err != nil {
-		return fmt.Errorf("minimum hardware not available: %v", err)
-	}
+	// if err := p.validator.ValidateMinHardwareAvailableForCreate(tinkerbellClusterSpec.Spec.Cluster.Spec, p.catalogue); err != nil {
+	// 	return fmt.Errorf("minimum hardware not available: %v", err)
+	// }
 
 	if err := p.validator.ValidateAndPopulateTemplate(ctx, tinkerbellClusterSpec.datacenterConfig, tinkerbellClusterSpec.Spec.TinkerbellTemplateConfigs[tinkerbellClusterSpec.firstWorkerMachineConfig().Spec.TemplateRef.Name]); err != nil {
 		return fmt.Errorf("failed validating worker node template config: %v", err)

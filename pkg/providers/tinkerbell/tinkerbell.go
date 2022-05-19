@@ -2,6 +2,7 @@ package tinkerbell
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,11 +49,18 @@ const (
 
 const defaultUsername = "ec2-user"
 
+//go:embed config/hegel.yaml
+var hegelManifest string
+
+//go:embed config/tink.yaml
+var tinkManifest string
+
 var (
 	eksaTinkerbellDatacenterResourceType = fmt.Sprintf("tinkerbelldatacenterconfigs.%s", v1alpha1.GroupVersion.Group)
 	eksaTinkerbellMachineResourceType    = fmt.Sprintf("tinkerbellmachineconfigs.%s", v1alpha1.GroupVersion.Group)
-	requiredEnvs                         = []string{tinkerbellCertURLKey, tinkerbellGRPCAuthKey, tinkerbellIPKey, tinkerbellPBnJGRPCAuthorityKey, tinkerbellHegelURLKey}
-	tinkerbellStackPorts                 = []int{42113, 50051, 50061}
+	// requiredEnvs                         = []string{tinkerbellCertURLKey, tinkerbellGRPCAuthKey, tinkerbellIPKey, tinkerbellPBnJGRPCAuthorityKey, tinkerbellHegelURLKey}
+	requiredEnvs         = []string{tinkerbellIPKey}
+	tinkerbellStackPorts = []int{42113, 50051, 50061}
 )
 
 type Provider struct {
@@ -351,14 +359,18 @@ func (p *Provider) InstallCustomProviderComponents(ctx context.Context, kubeconf
 func (p *Provider) InstallTinkerbellStack(ctx context.Context, cluster *types.Cluster, clusterSpec *cluster.Spec, bootstrap bool) error {
 	bundle := clusterSpec.VersionsBundle.Tinkerbell.TinkerbellStack
 
+	hegelPath, _ := p.writer.Write("hegel.yaml", []byte(hegelManifest))
+	tinkPath, _ := p.writer.Write("tink.yaml", []byte(tinkManifest))
+
 	components := []struct {
 		Name        string
 		Manifest    string
 		Deployments []string
 	}{
 		{
-			Name:        "tink",
-			Manifest:    bundle.Tink.Manifest.URI,
+			Name:     "tink",
+			Manifest: tinkPath,
+			// Manifest:    bundle.Tink.Manifest.URI,
 			Deployments: []string{"tink-server", "tink-controller-manager"},
 		},
 		// {
@@ -366,11 +378,12 @@ func (p *Provider) InstallTinkerbellStack(ctx context.Context, cluster *types.Cl
 		// 	Manifest:    bundle.Boots.Manifest.URI,
 		// 	Deployments: []string{"boots"},
 		// },
-		// {
-		// 	Name:        "hegel",
-		// 	Manifest:    bundle.Hegel.Manifest.URI,
-		// 	Deployments: []string{"hegel"},
-		// },
+		{
+			Name:     "hegel",
+			Manifest: hegelPath,
+			// Manifest:    bundle.Hegel.Manifest.URI,
+			Deployments: []string{"hegel"},
+		},
 		// TODO: Uncomment this when rufio is added to the bundle
 		// {
 		// 	Name:        "rufio",
@@ -390,7 +403,7 @@ func (p *Provider) InstallTinkerbellStack(ctx context.Context, cluster *types.Cl
 			for _, deployment := range component.Deployments {
 				logger.V(5).Info("Waiting for deployment to be ready", "deployment", deployment, "timeout", deploymentWaitTimeout)
 
-				if err := p.providerKubectlClient.WaitForDeployment(ctx, cluster, deploymentWaitTimeout, "Available", deployment, tinkNamespace); err != nil {
+				if err := p.providerKubectlClient.WaitForDeployment(ctx, cluster, deploymentWaitTimeout, "Available", deployment, constants.EksaSystemNamespace); err != nil {
 					return fmt.Errorf("waiting for deployment %s: %v", deployment, err)
 				}
 			}
@@ -406,10 +419,14 @@ func (p *Provider) InstallTinkerbellStack(ctx context.Context, cluster *types.Cl
 		logger.V(5).Info("Running boots on docker for bootstrap")
 		flags := []string{
 			"-e", "DATA_MODEL_VERSION=kubernetes",
+			"-e", "BOOTS_EXTRA_KERNEL_ARGS=tink_worker_image=quay.io/tinkerbell/tink-worker:latest",
+			"-e", "MIRROR_BASE_URL=https://tinkerbell-storage-for-eksa.s3.us-west-2.amazonaws.com",
+			"-e", fmt.Sprintf("TINKERBELL_GRPC_AUTHORITY=%s:42113", "194.17.0.20"),
+			"-e", "TINKERBELL_TLS=false",
 			"-v", fmt.Sprintf("%s:/kubeconfig", kubeconfig),
 			"--network", "host",
 		}
-		cmd := []string{"--kubeconfig", "/kubeconfig"}
+		cmd := []string{"-kubeconfig", "/kubeconfig", "-dhcp-addr", "0.0.0.0:67"}
 		if err := p.providerDockerClient.Run(ctx, bundle.Boots.Image.URI, "boots", cmd, flags...); err != nil {
 			return fmt.Errorf("running boots on docker: %v", err)
 		}
