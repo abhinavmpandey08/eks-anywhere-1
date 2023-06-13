@@ -90,17 +90,17 @@ func New(buildAccountCwClient *cloudwatch.Cloudwatch, testAccountCwClient *cloud
 	}
 
 	if l.processCodebuild == nil {
-		_ = l.ensureWriter(defaultOutputFolder)
+		l.ensureWriter(defaultOutputFolder)
 		l.processCodebuild = l.writer.writeCodeBuild
 	}
 
 	if l.processMessages == nil {
-		_ = l.ensureWriter(defaultOutputFolder)
+		l.ensureWriter(defaultOutputFolder)
 		l.processMessages = l.writer.writeMessages
 	}
 
 	if l.processTest == nil {
-		_ = l.ensureWriter(defaultOutputFolder)
+		l.ensureWriter(defaultOutputFolder)
 		l.processTest = l.writer.writeTest
 	}
 
@@ -189,18 +189,10 @@ func (l *testLogFetcher) FetchTestLogs(tests []testresults.TestResult) error {
 	return nil
 }
 
-func (l *testLogFetcher) ensureWriter(folderPath string) error {
-	if l.writer != nil {
-		return nil
+func (l *testLogFetcher) ensureWriter(folderPath string) {
+	if l.writer == nil {
+		l.writer = newTestsWriter(folderPath)
 	}
-
-	var err error
-	l.writer, err = newTestsWriter(folderPath)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func allMessages(logs []*cloudwatchlogs.OutputLogEvent) *bytes.Buffer {
