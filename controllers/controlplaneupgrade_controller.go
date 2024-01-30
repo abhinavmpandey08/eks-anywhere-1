@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +32,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
+	"sigs.k8s.io/cluster-api/controllers/external"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -67,6 +69,7 @@ func NewControlPlaneUpgradeReconciler(client client.Client) *ControlPlaneUpgrade
 //+kubebuilder:rbac:groups=anywhere.eks.amazonaws.com,resources=controlplaneupgrades/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=anywhere.eks.amazonaws.com,resources=controlplaneupgrades/finalizers,verbs=update
 //+kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=kubeadmconfigs,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=vspheremachines,verbs=get;list;watch;update;patch
 
 // Reconcile reconciles a ControlPlaneUpgrade object.
 // nolint:gocyclo
@@ -269,8 +272,38 @@ func (r *ControlPlaneUpgradeReconciler) updateResources(ctx context.Context, log
 		return fmt.Errorf("updating spec for machine %s: %v", machine.Name, err)
 	}
 
+	if err := r.updateInfraMachine(ctx, log, kcpSpec, machine); err != nil {
+		return fmt.Errorf("updating infra machine: %v", err)
+	}
+
 	if err := r.updateKubeadmConfig(ctx, log, kcpSpec, machine); err != nil {
 		return fmt.Errorf("updating kubeadm config: %v", err)
+	}
+
+	return nil
+}
+
+func (r *ControlPlaneUpgradeReconciler) updateInfraMachine(ctx context.Context, log logr.Logger, kcpSpec *controlplanev1.KubeadmControlPlaneSpec, machine *clusterv1.Machine) error {
+	infraMachine, err := external.Get(ctx, r.client, &machine.Spec.InfrastructureRef, machine.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(errors.Cause(err)) {
+			log.Info("Infra Machine not found", "Infra Machine", machine.Spec.InfrastructureRef.Name)
+			return nil
+		}
+		return errors.Wrapf(err, "failed to retrieve infra obj for machine %q", machine.Name)
+	}
+	patchHelper, err := patch.NewHelper(infraMachine, r.client)
+	if err != nil {
+		return fmt.Errorf("initializing patch helper for infrastructure machine %s: %v", infraMachine.GetName(), err)
+	}
+	annotations := infraMachine.GetAnnotations()
+	annotations["cluster.x-k8s.io/cloned-from-name"] = kcpSpec.MachineTemplate.InfrastructureRef.Name
+	infraMachine.SetAnnotations(annotations)
+
+	log.Info("Patching infrastructure machine", machine.Spec.InfrastructureRef.Kind, machine.Spec.InfrastructureRef.Name)
+	log.Info("InfraMachine", "VsphereMachine", infraMachine)
+	if err := patchHelper.Patch(ctx, infraMachine); err != nil {
+		return fmt.Errorf("patching for infrastructure machine %s: %v", infraMachine.GetName(), err)
 	}
 
 	return nil
