@@ -209,6 +209,10 @@ func buildTemplateMapCP(
 		"etcdCloneMode":                        etcdMachineSpec.CloneMode,
 	}
 
+	if clusterSpec.Cluster.Spec.ControlPlaneConfiguration.UpgradeRolloutStrategy != nil && clusterSpec.Cluster.Spec.ControlPlaneConfiguration.UpgradeRolloutStrategy.Type != "" {
+		values["cpUpgradeStrategy"] = clusterSpec.Cluster.Spec.ControlPlaneConfiguration.UpgradeRolloutStrategy.Type
+	}
+
 	auditPolicy, err := common.GetAuditPolicy(clusterSpec.Cluster.Spec.KubernetesVersion)
 	if err != nil {
 		return nil, err
@@ -398,6 +402,10 @@ func buildTemplateMapMD(
 		"workerNodeGroupTaints":          workerNodeGroupConfiguration.Taints,
 		"autoscalingConfig":              workerNodeGroupConfiguration.AutoScalingConfiguration,
 		"workerCloneMode":                workerNodeGroupMachineSpec.CloneMode,
+	}
+
+	if workerNodeGroupConfiguration.UpgradeRolloutStrategy != nil && workerNodeGroupConfiguration.UpgradeRolloutStrategy.Type != "" {
+		values["workerUpgradeStrategy"] = workerNodeGroupConfiguration.UpgradeRolloutStrategy.Type
 	}
 
 	if clusterSpec.Cluster.Spec.RegistryMirrorConfiguration != nil {

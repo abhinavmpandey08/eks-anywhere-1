@@ -841,7 +841,7 @@ func validateCPUpgradeRolloutStrategy(clusterConfig *Cluster) error {
 			return fmt.Errorf("ControlPlaneConfiguration: maxSurge for control plane must be 0 or 1")
 		}
 	case InPlaceStrategyType:
-		if clusterConfig.Spec.DatacenterRef.Kind != TinkerbellDatacenterKind {
+		if clusterConfig.Spec.DatacenterRef.Kind != TinkerbellDatacenterKind && clusterConfig.Spec.DatacenterRef.Kind != VSphereDatacenterKind {
 			return fmt.Errorf("ControlPlaneConfiguration: 'InPlace' upgrade rollout strategy type is only supported on Bare Metal")
 		}
 	default:
@@ -866,7 +866,7 @@ func validateMDUpgradeRolloutStrategy(w *WorkerNodeGroupConfiguration, datacente
 			return fmt.Errorf("WorkerNodeGroupConfiguration: maxSurge and maxUnavailable not specified or are 0. maxSurge and maxUnavailable cannot both be 0")
 		}
 	case InPlaceStrategyType:
-		if datacenterRefKind != TinkerbellDatacenterKind {
+		if datacenterRefKind != TinkerbellDatacenterKind && datacenterRefKind != VSphereDatacenterKind {
 			return fmt.Errorf("WorkerNodeGroupConfiguration: 'InPlace' upgrade rollout strategy type is only supported on Bare Metal")
 		}
 	default:

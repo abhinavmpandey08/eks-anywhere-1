@@ -18,6 +18,8 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -126,7 +128,11 @@ func (r *MachineDeploymentReconciler) reconcile(ctx context.Context, log logr.Lo
 			if err != nil {
 				return ctrl.Result{}, fmt.Errorf("retrieving list of control plane machines: %v", err)
 			}
-			if err := r.client.Create(ctx, machineDeploymentUpgrade(md, machines)); client.IgnoreAlreadyExists(err) != nil {
+			mdu, err := machineDeploymentUpgrade(md, machines)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			if err := r.client.Create(ctx, mdu); client.IgnoreAlreadyExists(err) != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to create machine deployment upgrade for MachineDeployment %s:  %v", md.Name, err)
 			}
 			return ctrl.Result{}, nil
@@ -172,7 +178,11 @@ func (r *MachineDeploymentReconciler) machinesToUpgrade(ctx context.Context, md 
 	return machineObjects, nil
 }
 
-func machineDeploymentUpgrade(md *clusterv1.MachineDeployment, machines []corev1.ObjectReference) *anywherev1.MachineDeploymentUpgrade {
+func machineDeploymentUpgrade(md *clusterv1.MachineDeployment, machines []corev1.ObjectReference) (*anywherev1.MachineDeploymentUpgrade, error) {
+	mdTemplate, err := json.Marshal(md.Spec.Template.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling MD.spec.template: %v", err)
+	}
 	return &anywherev1.MachineDeploymentUpgrade{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdUpgradeName(md.Name),
@@ -192,8 +202,9 @@ func machineDeploymentUpgrade(md *clusterv1.MachineDeployment, machines []corev1
 			},
 			KubernetesVersion:      *md.Spec.Template.Spec.Version,
 			MachinesRequireUpgrade: machines,
+			MachineSpecData:        base64.StdEncoding.EncodeToString(mdTemplate),
 		},
-	}
+	}, nil
 }
 
 func mdUpgradeName(mdName string) string {
