@@ -96,6 +96,8 @@ func TestCPUpgradeReconcileEarly(t *testing.T) {
 	}
 	client := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
+	clientRegistry.EXPECT().GetClient(ctx, types.NamespacedName{Name: "my-cp", Namespace: "eksa-system"}).Return(client, nil)
+
 	r := controllers.NewControlPlaneUpgradeReconciler(client, clientRegistry)
 	req := cpUpgradeRequest(testObjs.cpUpgrade)
 	_, err := r.Reconcile(ctx, req)
